@@ -1,0 +1,74 @@
+"""Prodigy InfoTech Data Science Internship - Task 1 Create a bar chart showing the 2024 population of the 10 most populous countries using the official dataset supplied in the internship repository. """
+
+from io import StringIO
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+DATA_URL = (
+    "https://raw.githubusercontent.com/Prodigy-InfoTech/data-science-datasets/"
+    "main/Task%201/API_SP.POP.TOTL_DS2_en_csv_v2_38144.csv"
+)
+
+OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+OUTPUT_DIR.mkdir(exist_ok=True)
+OUTPUT_FILE = OUTPUT_DIR / "top_10_population_2024.png"
+
+
+def load_population_data() -> pd.DataFrame:
+    """Load the World Bank dataset and prepare country-level rows."""
+    raw = pd.read_csv(DATA_URL, skiprows=4)
+    raw = raw.rename(columns={"Country Name": "Country", "2024": "Population"})
+
+    # Keep real country rows. World Bank aggregate groups have no Region
+    # in the accompanying metadata, while countries do.
+    metadata_url = (
+        "https://raw.githubusercontent.com/Prodigy-InfoTech/"
+        "data-science-datasets/main/Task%201/"
+        "Metadata_Country_API_SP.POP.TOTL_DS2_en_csv_v2_38144.csv"
+    )
+    metadata = pd.read_csv(metadata_url, encoding="utf-8-sig")
+    country_codes = metadata.loc[metadata["Region"].notna(), "Country Code"]
+
+    filtered = raw[raw["Country Code"].isin(country_codes)].copy()
+    filtered["Population"] = pd.to_numeric(filtered["Population"], errors="coerce")
+    return filtered.dropna(subset=["Population"])
+
+
+def create_chart(df: pd.DataFrame) -> pd.DataFrame:
+    """Create and save the top-10 horizontal bar chart."""
+    top10 = df.nlargest(10, "Population").sort_values("Population")
+
+    plt.figure(figsize=(11, 7))
+    bars = plt.barh(top10["Country"], top10["Population"] / 1_000_000)
+    plt.title("Top 10 Countries by Population (2024)", fontsize=16, fontweight="bold")
+    plt.xlabel("Population (millions)")
+    plt.ylabel("Country")
+    plt.grid(axis="x", linestyle="--", alpha=0.35)
+
+    for bar, value in zip(bars, top10["Population"]):
+        plt.text(
+            bar.get_width() + 5,
+            bar.get_y() + bar.get_height() / 2,
+            f"{value / 1_000_000:.1f}M",
+            va="center",
+            fontsize=9,
+        )
+
+    plt.tight_layout()
+    plt.savefig(OUTPUT_FILE, dpi=200, bbox_inches="tight")
+    plt.close()
+    return top10
+
+
+def main() -> None:
+    df = load_population_data()
+    top10 = create_chart(df)
+    print("Top 10 countries by 2024 population:")
+    print(top10[["Country", "Population"]].to_string(index=False))
+    print(f"\nChart saved to: {OUTPUT_FILE}")
+
+
+if __name__ == "__main__":
+    main()
